@@ -1,0 +1,209 @@
+From 5b7ac07b9555c42b073a7359cb76377f1d3a934f Mon Sep 17 00:00:00 2001
+From: invalid_git config <unknown@unknown>
+Date: Mon, 3 Jun 2024 08:59:49 +0000
+Subject: [PATCH] add debug info to ssif_bmc
+
+---
+ drivers/char/ipmi/ssif_bmc.c | 45 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/drivers/char/ipmi/ssif_bmc.c b/drivers/char/ipmi/ssif_bmc.c
+index 56346fb32872..43cd913d5b2a 100644
+--- a/drivers/char/ipmi/ssif_bmc.c
++++ b/drivers/char/ipmi/ssif_bmc.c
+@@ -137,6 +137,8 @@ static ssize_t ssif_bmc_read(struct file *file, char __user *buf, size_t count,
+ 	unsigned long flags;
+ 	ssize_t ret;
+ 
++	pr_info("%s: Entering ssif_bmc_read\n", DEVICE_NAME);
++
+ 	spin_lock_irqsave(&ssif_bmc->lock, flags);
+ 	while (!ssif_bmc->request_available) {
+ 		spin_unlock_irqrestore(&ssif_bmc->lock, flags);
+@@ -165,6 +167,8 @@ static ssize_t ssif_bmc_read(struct file *file, char __user *buf, size_t count,
+ 		ret = copy_to_user(buf, &msg, count);
+ 	}
+ 
++	pr_info("%s: Exiting ssif_bmc_read\n", DEVICE_NAME);
++
+ 	return (ret < 0) ? ret : count;
+ }
+ 
+@@ -177,6 +181,8 @@ static ssize_t ssif_bmc_write(struct file *file, const char __user *buf, size_t
+ 	unsigned long flags;
+ 	ssize_t ret;
+ 
++	pr_info("%s: Entering ssif_bmc_write\n", DEVICE_NAME);
++
+ 	if (count > sizeof(struct ipmi_ssif_msg))
+ 		return -EINVAL;
+ 
+@@ -223,6 +229,8 @@ static ssize_t ssif_bmc_write(struct file *file, const char __user *buf, size_t
+ exit:
+ 	spin_unlock_irqrestore(&ssif_bmc->lock, flags);
+ 
++	pr_info("%s: Exiting ssif_bmc_write\n", DEVICE_NAME);
++
+ 	return (ret < 0) ? ret : count;
+ }
+ 
+@@ -231,6 +239,8 @@ static int ssif_bmc_open(struct inode *inode, struct file *file)
+ 	struct ssif_bmc_ctx *ssif_bmc = to_ssif_bmc(file);
+ 	int ret = 0;
+ 
++	pr_info("%s: Opening device\n", DEVICE_NAME);
++
+ 	spin_lock_irq(&ssif_bmc->lock);
+ 	if (!ssif_bmc->running)
+ 		ssif_bmc->running = 1;
+@@ -246,6 +256,8 @@ static __poll_t ssif_bmc_poll(struct file *file, poll_table *wait)
+ 	struct ssif_bmc_ctx *ssif_bmc = to_ssif_bmc(file);
+ 	__poll_t mask = 0;
+ 
++	pr_info("%s: Polling device\n", DEVICE_NAME);
++
+ 	poll_wait(file, &ssif_bmc->wait_queue, wait);
+ 
+ 	spin_lock_irq(&ssif_bmc->lock);
+@@ -262,6 +274,8 @@ static int ssif_bmc_release(struct inode *inode, struct file *file)
+ {
+ 	struct ssif_bmc_ctx *ssif_bmc = to_ssif_bmc(file);
+ 
++	pr_info("%s: Releasing device\n", DEVICE_NAME);
++
+ 	spin_lock_irq(&ssif_bmc->lock);
+ 	ssif_bmc->running = 0;
+ 	spin_unlock_irq(&ssif_bmc->lock);
+@@ -284,6 +298,8 @@ static const struct file_operations ssif_bmc_fops = {
+ /* Called with ssif_bmc->lock held. */
+ static void complete_response(struct ssif_bmc_ctx *ssif_bmc)
+ {
++	pr_info("%s: Completing response\n", DEVICE_NAME);
++
+ 	/* Invalidate response in buffer to denote it having been sent. */
+ 	ssif_bmc->response.len = 0;
+ 	ssif_bmc->response_in_progress = false;
+@@ -299,6 +315,8 @@ static void response_timeout(struct timer_list *t)
+ 	struct ssif_bmc_ctx *ssif_bmc = from_timer(ssif_bmc, t, response_timer);
+ 	unsigned long flags;
+ 
++	pr_err("%s: Response timeout occurred\n", DEVICE_NAME);
++
+ 	spin_lock_irqsave(&ssif_bmc->lock, flags);
+ 
+ 	/* Do nothing if the response is in progress */
+@@ -316,6 +334,8 @@ static void response_timeout(struct timer_list *t)
+ /* Called with ssif_bmc->lock held. */
+ static void handle_request(struct ssif_bmc_ctx *ssif_bmc)
+ {
++	pr_info("%s: Handling request\n", DEVICE_NAME);
++
+ 	/* set ssif_bmc to busy waiting for response */
+ 	ssif_bmc->busy = true;
+ 	/* Request message is available to process */
+@@ -472,6 +492,8 @@ static void handle_read_processed(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ 
+ static void handle_write_received(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
++	pr_info("%s: Handling write received\n", DEVICE_NAME);
++
+ 	/*
+ 	 * The msg_idx must be 1 when first enter SSIF_REQ_RECVING state
+ 	 * And it would never exceeded 36 bytes included the 32 bytes max payload +
+@@ -540,6 +562,8 @@ static void process_request_part(struct ssif_bmc_ctx *ssif_bmc)
+ 	struct ssif_part_buffer *part = &ssif_bmc->part_buf;
+ 	unsigned int len;
+ 
++	pr_info("%s: Processing request part\n", DEVICE_NAME);
++
+ 	switch (part->smbus_cmd) {
+ 	case SSIF_IPMI_SINGLEPART_WRITE:
+ 		/* save the whole part to request*/
+@@ -577,6 +601,8 @@ static void process_request_part(struct ssif_bmc_ctx *ssif_bmc)
+ static void process_smbus_cmd(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
+ 	/* SMBUS command can vary (single or multi-part) */
++	pr_info("%s: Processing SMBus command 0x%x\n", DEVICE_NAME, *val);
++
+ 	ssif_bmc->part_buf.smbus_cmd = *val;
+ 	ssif_bmc->msg_idx = 1;
+ 	memset(&ssif_bmc->part_buf.payload[0], 0, MAX_PAYLOAD_PER_TRANSACTION);
+@@ -598,6 +624,8 @@ static void process_smbus_cmd(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ 
+ static void on_read_requested_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
++	pr_info("%s: Read requested event in state=%s\n", DEVICE_NAME, state_to_string(ssif_bmc->state));
++
+ 	if (ssif_bmc->state == SSIF_READY ||
+ 	    ssif_bmc->state == SSIF_START ||
+ 	    ssif_bmc->state == SSIF_REQ_RECVING ||
+@@ -642,6 +670,8 @@ static void on_read_requested_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ 
+ static void on_read_processed_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
++	pr_info("%s: Read processed event in state=%s\n", DEVICE_NAME, state_to_string(ssif_bmc->state));
++
+ 	if (ssif_bmc->state == SSIF_READY ||
+ 	    ssif_bmc->state == SSIF_START ||
+ 	    ssif_bmc->state == SSIF_REQ_RECVING ||
+@@ -665,6 +695,8 @@ static void on_read_processed_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ 
+ static void on_write_requested_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
++	pr_info("%s: Write requested event in state=%s\n", DEVICE_NAME, state_to_string(ssif_bmc->state));
++
+ 	if (ssif_bmc->state == SSIF_READY || ssif_bmc->state == SSIF_SMBUS_CMD) {
+ 		ssif_bmc->state = SSIF_START;
+ 
+@@ -684,6 +716,8 @@ static void on_write_requested_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ 
+ static void on_write_received_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
++	pr_info("%s: Write received event in state=%s\n", DEVICE_NAME, state_to_string(ssif_bmc->state));
++
+ 	if (ssif_bmc->state == SSIF_READY ||
+ 	    ssif_bmc->state == SSIF_RES_SENDING) {
+ 		dev_warn(&ssif_bmc->client->dev,
+@@ -716,6 +750,8 @@ static void on_write_received_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ 
+ static void on_stop_event(struct ssif_bmc_ctx *ssif_bmc, u8 *val)
+ {
++	pr_info("%s: Stop event in state=%s\n", DEVICE_NAME, state_to_string(ssif_bmc->state));
++
+ 	if (ssif_bmc->state == SSIF_READY ||
+ 	    ssif_bmc->state == SSIF_START ||
+ 	    ssif_bmc->state == SSIF_SMBUS_CMD ||
+@@ -761,6 +797,8 @@ static int ssif_bmc_cb(struct i2c_client *client, enum i2c_slave_event event, u8
+ 	struct ssif_bmc_ctx *ssif_bmc = i2c_get_clientdata(client);
+ 	int ret = 0;
+ 
++	pr_info("%s: I2C slave event %d\n", DEVICE_NAME, event);
++
+ 	spin_lock_irqsave(&ssif_bmc->lock, flags);
+ 
+ 	switch (event) {
+@@ -802,10 +840,15 @@ static int ssif_bmc_probe(struct i2c_client *client)
+ 	struct ssif_bmc_ctx *ssif_bmc;
+ 	int ret;
+ 
++	pr_info("%s: Probing device\n", DEVICE_NAME);
++
+ 	ssif_bmc = devm_kzalloc(&client->dev, sizeof(*ssif_bmc), GFP_KERNEL);
+ 	if (!ssif_bmc)
+ 		return -ENOMEM;
+ 
++	pr_info("%s: I2C address: 0x%02x\n", DEVICE_NAME, client->addr);
++	pr_info("%s: Device name: %s\n", DEVICE_NAME, client->name);
++
+ 	spin_lock_init(&ssif_bmc->lock);
+ 
+ 	init_waitqueue_head(&ssif_bmc->wait_queue);
+@@ -839,6 +882,8 @@ static void ssif_bmc_remove(struct i2c_client *client)
+ {
+ 	struct ssif_bmc_ctx *ssif_bmc = i2c_get_clientdata(client);
+ 
++	pr_info("%s: Removing device\n", DEVICE_NAME);
++
+ 	i2c_slave_unregister(client);
+ 	misc_deregister(&ssif_bmc->miscdev);
+ }

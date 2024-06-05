@@ -1,0 +1,17 @@
+{
+    "bitbake.pathToEnvScript": "${workspaceFolder}/setup ast2600-default",
+    "bitbake.pathToBitbakeFolder": "${workspaceFolder}/poky/bitbake",
+    "bitbake.sdkImage": "obmc-phosphor-image",
+    "files.associations": {
+        "*.conf": "bitbake",
+        "*.inc": "bitbake"
+    },
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/poky/bitbake/lib",
+        "${workspaceFolder}/poky/meta/lib"
+    ],
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/poky/bitbake/lib",
+        "${workspaceFolder}/poky/meta/lib"
+    ],
+}

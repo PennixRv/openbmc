@@ -1,0 +1,145 @@
+From 1f54b859a461fe5cc58ed51bd597736625b23535 Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Wed, 5 Jun 2024 02:23:46 +0000
+Subject: [PATCH] add debug-code to ssifbridged.cpp
+
+---
+ ssifbridged.cpp | 52 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 51 insertions(+), 1 deletion(-)
+
+diff --git a/ssifbridged.cpp b/ssifbridged.cpp
+index 4ab1197..cd970f4 100644
+--- a/ssifbridged.cpp
++++ b/ssifbridged.cpp
+@@ -118,6 +118,10 @@ SsifChannel::SsifChannel(std::shared_ptr<boost::asio::io_context>& io,
+     }
+     else
+     {
++        std::string msgToLog = "Opened SSIF driver with flags O_RDWR."
++                               " FILENAME=" +
++                               devName;
++        log<level::INFO>(msgToLog.c_str());
+         dev = std::make_unique<boost::asio::posix::stream_descriptor>(*io, fd);
+     }
+ 
+@@ -127,6 +131,11 @@ SsifChannel::SsifChannel(std::shared_ptr<boost::asio::io_context>& io,
+     std::shared_ptr<sdbusplus::asio::dbus_interface> iface =
+         server->add_interface(ssifObj, ssifBus);
+     iface->initialize();
++    std::string msgToLog = "SSIFChannel initialized successfully."
++                           " device=" + devName +
++                           " verbose=" + std::to_string(verbose) +
++                           " numberOfReqNotRsp=" + std::to_string(numberOfReqNotRsp);
++    log<level::INFO>(msgToLog.c_str());
+ }
+ 
+ void SsifChannel::channelAbort(const char* msg,
+@@ -140,15 +149,25 @@ void SsifChannel::channelAbort(const char* msg,
+ 
+ void SsifChannel::async_read()
+ {
++    std::string msgToLog = "Starting async_read...";
++    log<level::DEBUG>(msgToLog.c_str());
+     boost::asio::async_read(*dev,
+                             boost::asio::buffer(xferBuffer, xferBuffer.size()),
+                             boost::asio::transfer_at_least(2),
+                             [this](const boost::system::error_code& ec,
+-                                   size_t rlen) { processMessage(ec, rlen); });
++                                   size_t rlen) { 
++                                std::string msgToLog = "async_read callback triggered"
++                                                       " ec=" + ec.message() +
++                                                       " rlen=" + std::to_string(rlen);
++                                log<level::DEBUG>(msgToLog.c_str());
++                                processMessage(ec, rlen); 
++                            });
+ }
+ 
+ int SsifChannel::showNumOfReqNotRsp()
+ {
++    std::string msgToLog = "showNumOfReqNotRsp called. numberOfReqNotRsp=" + std::to_string(numberOfReqNotRsp);
++    log<level::DEBUG>(msgToLog.c_str());
+     return numberOfReqNotRsp;
+ }
+ 
+@@ -193,6 +212,10 @@ void rspTimerHandler()
+             " cmd=" + std::to_string(rsp[ssifchannel->sizeofLenField + 1]) +
+             " cc=" + std::to_string(ccResponseNotAvailable);
+         log<level::ERR>(msgToLog.c_str());
++    } else {
++        msgToLog = "Successfully sent ssif respond message:"
++                   " size=" + std::to_string(wlen);
++        log<level::INFO>(msgToLog.c_str());
+     }
+ }
+ 
+@@ -201,12 +224,22 @@ void initTimer()
+     if (!rspTimer)
+     {
+         rspTimer = std::make_unique<sdbusplus::Timer>(rspTimerHandler);
++        std::string msgToLog = "Response timer initialized.";
++        log<level::INFO>(msgToLog.c_str());
++    } else {
++        std::string msgToLog = "Response timer already initialized.";
++        log<level::DEBUG>(msgToLog.c_str());
+     }
+ }
+ 
+ void SsifChannel::processMessage(const boost::system::error_code& ecRd,
+                                  size_t rlen)
+ {
++    std::string msgToLog = "processMessage called"
++                           " ecRd=" + ecRd.message() +
++                           " rlen=" + std::to_string(rlen);
++    log<level::DEBUG>(msgToLog.c_str());
++
+     if (ecRd || rlen < 2)
+     {
+         channelAbort("Failed to read req msg", ecRd);
+@@ -354,6 +387,10 @@ void SsifChannel::processMessage(const boost::system::error_code& ecRd,
+                 " lun=" + std::to_string(lun) + " cmd=" + std::to_string(cmd) +
+                 " cc=" + std::to_string(cc);
+             log<level::ERR>(msgToLog.c_str());
++        } else {
++            std::string msgToLog = "Successfully sent ssif respond message:"
++                                   " size=" + std::to_string(wlen);
++            log<level::INFO>(msgToLog.c_str());
+         }
+         rspTimer->stop();
+     },
+@@ -372,11 +409,17 @@ int main(int argc, char* argv[])
+     app.add_option("-v,--verbose", verbose, "print more verbose output");
+     CLI11_PARSE(app, argc, argv);
+ 
++    std::string msgToLog = "Program started. Parsing arguments.";
++    log<level::INFO>(msgToLog.c_str());
++
+     // Connect to system bus
+     auto io = std::make_shared<boost::asio::io_context>();
+     sd_bus* dbus;
+     sd_bus_default_system(&dbus);
+ 
++    msgToLog = "Connected to system bus.";
++    log<level::INFO>(msgToLog.c_str());
++
+     /* This might be a sdbusplus::Timer bug, without timer t2, rspTimer
+      * will not work
+      */
+@@ -389,11 +432,18 @@ int main(int argc, char* argv[])
+                                            numberOfReqNotRsp);
+     if (!ssifchannel->initOK())
+     {
++        msgToLog = "SSIF channel initialization failed.";
++        log<level::ERR>(msgToLog.c_str());
+         return EXIT_FAILURE;
+     }
+     initTimer();
+     sdbusplus::asio::sd_event_wrapper sdEvents(*io);
++    msgToLog = "Starting io_context run loop.";
++    log<level::INFO>(msgToLog.c_str());
+     io->run();
+ 
++    msgToLog = "Program exiting.";
++    log<level::INFO>(msgToLog.c_str());
++
+     return 0;
+ }
