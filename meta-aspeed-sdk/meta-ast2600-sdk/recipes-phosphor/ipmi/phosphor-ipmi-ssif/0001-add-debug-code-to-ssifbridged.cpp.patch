@@ -1,14 +1,14 @@
-From 1f54b859a461fe5cc58ed51bd597736625b23535 Mon Sep 17 00:00:00 2001
-From: Your Name <you@example.com>
-Date: Wed, 5 Jun 2024 02:23:46 +0000
+From c00a51485afaba3ebed1b9116fed2989b4d178fb Mon Sep 17 00:00:00 2001
+From: pengfu <peng.fu@rivai.ai>
+Date: Fri, 7 Jun 2024 08:00:57 +0000
 Subject: [PATCH] add debug-code to ssifbridged.cpp
 
 ---
- ssifbridged.cpp | 52 ++++++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 51 insertions(+), 1 deletion(-)
+ ssifbridged.cpp | 72 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 71 insertions(+), 1 deletion(-)
 
 diff --git a/ssifbridged.cpp b/ssifbridged.cpp
-index 4ab1197..cd970f4 100644
+index 4ab1197..e57cdd7 100644
 --- a/ssifbridged.cpp
 +++ b/ssifbridged.cpp
 @@ -118,6 +118,10 @@ SsifChannel::SsifChannel(std::shared_ptr<boost::asio::io_context>& io,
@@ -34,7 +34,7 @@ index 4ab1197..cd970f4 100644
  }
  
  void SsifChannel::channelAbort(const char* msg,
-@@ -140,15 +149,25 @@ void SsifChannel::channelAbort(const char* msg,
+@@ -140,15 +149,35 @@ void SsifChannel::channelAbort(const char* msg,
  
  void SsifChannel::async_read()
  {
@@ -50,6 +50,16 @@ index 4ab1197..cd970f4 100644
 +                                                       " ec=" + ec.message() +
 +                                                       " rlen=" + std::to_string(rlen);
 +                                log<level::DEBUG>(msgToLog.c_str());
++                                
++                                // Print read data in hex
++                                std::ostringstream oss;
++                                oss << "Read data: ";
++                                for (size_t i = 0; i < rlen; ++i)
++                                {
++                                    oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(xferBuffer[i]) << " ";
++                                }
++                                log<level::ERR>(oss.str().c_str());
++
 +                                processMessage(ec, rlen); 
 +                            });
  }
@@ -61,7 +71,7 @@ index 4ab1197..cd970f4 100644
      return numberOfReqNotRsp;
  }
  
-@@ -193,6 +212,10 @@ void rspTimerHandler()
+@@ -193,6 +222,10 @@ void rspTimerHandler()
              " cmd=" + std::to_string(rsp[ssifchannel->sizeofLenField + 1]) +
              " cc=" + std::to_string(ccResponseNotAvailable);
          log<level::ERR>(msgToLog.c_str());
@@ -72,7 +82,7 @@ index 4ab1197..cd970f4 100644
      }
  }
  
-@@ -201,12 +224,22 @@ void initTimer()
+@@ -201,12 +234,22 @@ void initTimer()
      if (!rspTimer)
      {
          rspTimer = std::make_unique<sdbusplus::Timer>(rspTimerHandler);
@@ -95,7 +105,24 @@ index 4ab1197..cd970f4 100644
      if (ecRd || rlen < 2)
      {
          channelAbort("Failed to read req msg", ecRd);
-@@ -354,6 +387,10 @@ void SsifChannel::processMessage(const boost::system::error_code& ecRd,
+@@ -342,6 +385,16 @@ void SsifChannel::processMessage(const boost::system::error_code& ecRd,
+                 " numberOfReqNotRsp=" + std::to_string(numberOfReqNotRsp);
+             log<level::INFO>(msgToLog.c_str());
+         }
++        
++        // Print write data in hex
++        std::ostringstream oss;
++        oss << "Write data: ";
++        for (size_t i = 0; i < rsp.size(); ++i)
++        {
++            oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(rsp[i]) << " ";
++        }
++        log<level::ERR>(oss.str().c_str());
++
+         boost::system::error_code ecWr;
+         size_t wlen = boost::asio::write(*dev, boost::asio::buffer(rsp), ecWr);
+         if (ecWr || wlen != rsp.size())
+@@ -354,6 +407,10 @@ void SsifChannel::processMessage(const boost::system::error_code& ecRd,
                  " lun=" + std::to_string(lun) + " cmd=" + std::to_string(cmd) +
                  " cc=" + std::to_string(cc);
              log<level::ERR>(msgToLog.c_str());
@@ -106,7 +133,7 @@ index 4ab1197..cd970f4 100644
          }
          rspTimer->stop();
      },
-@@ -372,11 +409,17 @@ int main(int argc, char* argv[])
+@@ -372,11 +429,17 @@ int main(int argc, char* argv[])
      app.add_option("-v,--verbose", verbose, "print more verbose output");
      CLI11_PARSE(app, argc, argv);
  
@@ -124,7 +151,7 @@ index 4ab1197..cd970f4 100644
      /* This might be a sdbusplus::Timer bug, without timer t2, rspTimer
       * will not work
       */
-@@ -389,11 +432,18 @@ int main(int argc, char* argv[])
+@@ -389,11 +452,18 @@ int main(int argc, char* argv[])
                                             numberOfReqNotRsp);
      if (!ssifchannel->initOK())
      {
